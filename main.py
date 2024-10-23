@@ -2,24 +2,122 @@ import tkinter as tk
 from tkinter import filedialog
 import pygame
 import pygame_gui
-import math
+import numpy as np
 
 # Constants for UI
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
 ROOM_WIDTH, ROOM_HEIGHT = 400, 400
 GREY = "#A19CA2"
 BLUE = "#17283D"
-ORANGE = "#FF8C00"
+ORANGE = "#292021"
 WHITE = "#FFFFFF"
 BLACK = "#0e0e0e"
 
+# Initialize pygame
 pygame.init()
 
-# Main Window setup
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption('Sound Wave Visualization')
+# Parameters for wave simulation
+Lx, Ly = 1.0, 1.0  # Domain size
+c = 1.0  # Wave speed
+nx, ny = 300, 300  # Number of spatial points
+dx, dy = Lx / (nx - 1), Ly / (ny - 1)  # Spatial step sizes
+dt = 0.001  # Time step size
+courant_x = (c * dt / dx) ** 2
+courant_y = (c * dt / dy) ** 2
+damping_coefficient = 0.01  # Damping coefficient
 
-# Manager for pygame_gui
+# Grid for 2D wave simulation
+x = np.linspace(0, Lx, nx)
+y = np.linspace(0, Ly, ny)
+X, Y = np.meshgrid(x, y)
+
+# Initialize wave arrays
+u = np.zeros((ny, nx))  # Current wave state
+u_prev = np.zeros((ny, nx))  # Previous wave state
+u_next = np.zeros((ny, nx))  # Next wave state
+amplitude = 0.00000000001  # Default amplitude for the wave
+
+
+# Function to generate a single impulse wave on button click
+def generate_impulse():
+    """Creates a single impulse at the center of the domain."""
+    global u, u_prev, amplitude
+    center_x, center_y = nx // 2, ny // 2
+    # Set the impulse to the specified amplitude
+    u[center_y, center_x] = amplitude  # Set impulse at the center
+    u_prev = u.copy()  # Store current state for the next step
+
+
+# Function to reset the simulation
+def reset_simulation():
+    """Resets the wave simulation to its initial state."""
+    global u, u_prev, u_next
+    u.fill(0)  # Reset current wave state to zero
+    u_prev.fill(0)  # Reset previous wave state to zero
+    u_next.fill(0)  # Reset next wave state to zero
+
+
+# Pygame screen size and setup
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.DOUBLEBUF)
+pygame.display.set_caption("Sound Visualization and Wave Simulation")
+
+
+# Function to rescale wave data to grayscale color values
+def rescale_wave_to_grayscale(u):
+    """Rescale wave data to a grayscale image."""
+    u_min = np.min(u)
+    u_max = np.max(u)
+
+    if u_max == u_min:
+        u_rescaled = np.zeros_like(u, dtype=np.uint8)
+    else:
+        u_normalized = (u - u_min) / (u_max - u_min)
+        u_rescaled = (u_normalized * 255).astype(np.uint8)
+
+    grayscale_image = np.stack((u_rescaled,) * 3, axis=-1)
+
+    return grayscale_image
+
+
+# Time evolution of the wave with damping and echo
+def update_wave():
+    global u, u_prev, u_next
+    # Update the wave equation
+    u_next[1:-1, 1:-1] = (2 * u[1:-1, 1:-1] - u_prev[1:-1, 1:-1] +
+                          courant_x * (u[1:-1, 2:] - 2 * u[1:-1, 1:-1] + u[1:-1, :-2]) +
+                          courant_y * (u[2:, 1:-1] - 2 * u[1:-1, 1:-1] + u[:-2, 1:-1]) -
+                          damping_coefficient * u[1:-1, 1:-1])  # Include damping
+
+    # Echo simulation: Reflect the wave at the edges
+    u_next[0, :] = u_next[1, :]  # Top edge reflection
+    u_next[-1, :] = u_next[-2, :]  # Bottom edge reflection
+    u_next[:, 0] = u_next[:, 1]  # Left edge reflection
+    u_next[:, -1] = u_next[:, -2]  # Right edge reflection
+
+    u_prev = u.copy()
+    u = u_next.copy()
+
+
+# Draw separator line
+separator_y = 150  # y-coordinate for the separator line
+separator_color = GREY  # Line color
+
+
+# Function to draw a separator line
+def draw_separator():
+    pygame.draw.line(screen, separator_color, (550, separator_y), (750, separator_y), 5)
+
+
+# Function to open room selection dialog
+def open_room_dialog():
+    file_path = filedialog.askopenfilename()
+    if file_path:  # Check if a file was selected
+        print(f"Room file selected: {file_path}")
+    else:
+        print("No file selected.")
+
+
+# Main Window setup
 manager = pygame_gui.UIManager((SCREEN_WIDTH, SCREEN_HEIGHT))
 
 # Tkinter initialization (for file dialog)
@@ -27,153 +125,119 @@ root = tk.Tk()
 root.withdraw()
 
 # UI Elements
-room_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((550, 50), (200, 40)),
-                                           text='Wybierz Pomieszczenie',
+ui_x_start = 550
+y_spacing = 50  # Space between elements
+
+room_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((ui_x_start, 50), (200, 40)),
+                                           text='Select Room',
                                            manager=manager)
+
 wall_material_dropdown = pygame_gui.elements.UIDropDownMenu(options_list=['Wood', 'Concrete', 'Glass'],
                                                             starting_option='Wood',
-                                                            relative_rect=pygame.Rect((550, 100), (200, 40)),
+                                                            relative_rect=pygame.Rect((ui_x_start, 100 + y_spacing),
+                                                                                      (200, 40)),
                                                             manager=manager)
 
-# Draw separator line
-separator_y = 150  # y-coordinate for the separator line
-separator_color = GREY  # Line color
-
-
-# Draw a separator line between the sections
-def draw_separator():
-    pygame.draw.line(screen, separator_color, (550, separator_y), (750, separator_y), 5)
-
-
+# Amplitude UI Elements
 amplitude_label = pygame_gui.elements.UILabel(
-    relative_rect=pygame.Rect((575, 150), (150, 20)),
-    text="Amplituda",
+    relative_rect=pygame.Rect((ui_x_start + 25, 150 + 2 * y_spacing), (150, 20)),
+    text="Amplitude",
     manager=manager)
 
-amplitude_slider = pygame_gui.elements.UIHorizontalSlider(relative_rect=pygame.Rect((550, 180), (200, 25)),
-                                                          start_value=0.5, value_range=(0, 1), manager=manager)
+amplitude_slider = pygame_gui.elements.UIHorizontalSlider(
+    relative_rect=pygame.Rect((ui_x_start, 180 + 2 * y_spacing), (200, 25)),
+    start_value=amplitude, value_range=(0, 1), manager=manager)
 
+# Frequency UI Elements
 frequency_label = pygame_gui.elements.UILabel(
-    relative_rect=pygame.Rect((575, 220), (150, 20)),
-    text="Częstotliwość",
+    relative_rect=pygame.Rect((ui_x_start + 25, 220 + 3 * y_spacing), (150, 20)),
+    text="Frequency",
     manager=manager)
 
-frequency_slider = pygame_gui.elements.UIHorizontalSlider(relative_rect=pygame.Rect((550, 250), (200, 25)),
-                                                          start_value=440, value_range=(20, 2000), manager=manager)
+frequency_slider = pygame_gui.elements.UIHorizontalSlider(
+    relative_rect=pygame.Rect((ui_x_start, 250 + 3 * y_spacing), (200, 25)),
+    start_value=440, value_range=(20, 2000), manager=manager)
+font = pygame.font.Font(None, 20)
+
+# Sound Position Elements
+position_label = pygame_gui.elements.UILabel(
+    relative_rect=pygame.Rect((ui_x_start + 25, 290 + 4 * y_spacing), (150, 20)),
+    text="Sound Position",
+    manager=manager)
+
+x_position_box = pygame_gui.elements.UITextEntryLine(
+    relative_rect=pygame.Rect((ui_x_start, 320 + 4 * y_spacing), (50, 30)),
+    manager=manager)
+x_position_box.set_text("0")
+
+y_position_box = pygame_gui.elements.UITextEntryLine(
+    relative_rect=pygame.Rect((ui_x_start + 100, 320 + 4 * y_spacing), (50, 30)),
+    manager=manager)
+y_position_box.set_text("0")
 
 # Room Visualization Area
 room_rect = pygame.Rect(50, 50, ROOM_WIDTH, ROOM_HEIGHT)
-sound_sources = []  # Stores the positions of sound sources
-waves = []  # List of waves to simulate
-wall_materials = {'Wood': 0.6, 'Concrete': 0.9, 'Glass': 0.8}  # Wall materials with reflection coefficients
 
-# Walls of the room
-walls = [
-    pygame.Rect(50, 50, ROOM_WIDTH, 10),  # Top wall
-    pygame.Rect(50, 50, 10, ROOM_HEIGHT),  # Left wall
-    pygame.Rect(50, 50 + ROOM_HEIGHT - 10, ROOM_WIDTH, 10),  # Bottom wall
-    pygame.Rect(50 + ROOM_WIDTH - 10, 50, 10, ROOM_HEIGHT)  # Right wall
-]
-
-
-# Function to calculate reflection
-def reflect_wave(wave, wall):
-    # Reverse the velocity when hitting a wall
-    if wall.width > wall.height:  # Horizontal wall (top/bottom)
-        wave.velocity.y = -wave.velocity.y
-    else:  # Vertical wall (left/right)
-        wave.velocity.x = -wave.velocity.x
-    # Apply attenuation based on wall material
-    material = wall_material_dropdown.selected_option
-    wave.amplitude *= wall_materials[material]
-
-# Function to calculate color based on amplitude
-def get_wave_color(amplitude):
-    max_color = pygame.Color(255, 255, 255)  # White for max amplitude
-    min_color = pygame.Color(0, 0, 255)  # Blue for low amplitude
-    color = min_color.lerp(max_color, amplitude)  # Interpolate between blue and white
-    return color
-
-# Sound wave class
-class SoundWave:
-    def __init__(self, position, frequency, amplitude):
-        self.position = pygame.Vector2(position)
-        self.radius = 0  # Start with a radius of 0
-        self.frequency = frequency
-        self.amplitude = amplitude
-        self.lifespan = 500  # Determines how long the wave will be visible
-
-    def update(self):
-        self.radius += 2  # Increase the radius to simulate the wave expanding
-        self.lifespan -= 1
-        self.amplitude *= 0.995  # Dampen the amplitude over time
-
-    def draw(self, surface):
-        if self.amplitude > 0.01:
-            color = get_wave_color(self.amplitude)  # Get color based on amplitude
-            pygame.draw.circle(surface, color, (int(self.position.x), int(self.position.y)), int(self.radius), 2)
-
-
-# Function to open room selection dialog
-def open_room_dialog():
-    file_path = filedialog.askopenfilename()
-    print(f"Room file selected: {file_path}")  # For now, we'll just print it
-
-
-# Main Loop
+# Simulation loop
 running = True
+clock = pygame.time.Clock()
+wave_active = False  # Track whether the wave has been triggered
+
 while running:
-    time_delta = pygame.time.Clock().tick(60) / 1000.0
+    time_delta = clock.tick(60) / 1000.0
     for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+        if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
             running = False
 
         # Handle Pygame GUI events
-        if event.type == pygame.USEREVENT:
-            if event.type == pygame_gui.UI_BUTTON_PRESSED:
-                if event.ui_element == room_button:
-                    open_room_dialog()
-
-        # Click on the room to add a sound source
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            if room_rect.collidepoint(event.pos):
-                # Add a new sound source
-                frequency = frequency_slider.get_current_value()
-                amplitude = amplitude_slider.get_current_value()
-                waves.append(SoundWave(event.pos, frequency, amplitude))
-
         manager.process_events(event)
 
-    manager.update(time_delta)
+        # Check for amplitude slider change
+        if event.type == pygame.USEREVENT:
+            if event.ui_element == amplitude_slider:
+                amplitude = amplitude_slider.get_current_value()  # Get the current value of the amplitude slider
+                damping_coefficient = amplitude
+                print(amplitude)
 
-    # Draw the room and UI
+        # Trigger wave generation on spacebar press or mouse click
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE:
+                generate_impulse()  # Generate a single impulse at the center
+                wave_active = True
+            elif event.key == pygame.K_r:
+                reset_simulation()  # Reset the simulation
+
+    # Update wave only if the wave has been generated
+    if wave_active:
+        update_wave()
+
+    # Rescale to grayscale and create pygame surface
+    u_color = rescale_wave_to_grayscale(u)
+    surface = pygame.surfarray.make_surface(u_color)
+
+    # Scale to room size and display
+    surface = pygame.transform.scale(surface, (ROOM_WIDTH, ROOM_HEIGHT))  # Scale to room size
+
+    # Clear the screen before drawing
     screen.fill(BLUE)
 
     # Draw room visualization
-    pygame.draw.rect(screen, GREY, room_rect, 0)
-    pygame.draw.rect(screen, ORANGE, room_rect, 2)
+    pygame.draw.rect(screen, GREY, room_rect)  # Draw the room
+    pygame.draw.rect(screen, ORANGE, room_rect, 2)  # Draw the outline of the room
 
-    # Draw the sound waves and update them
-    for wave in waves[:]:
-        wave.update()
-        wave.draw(screen)
+    # Blit the wave simulation inside the room
+    screen.blit(surface, room_rect.topleft)  # Use topleft to place inside the room
 
-        # Check for collisions with walls
-        for wall in walls:
-            if wall.collidepoint(wave.position):
-                reflect_wave(wave, wall)
+    draw_separator()  # Draw the separator line
 
-        if wave.lifespan <= 0:
-            waves.remove(wave)  # Remove waves that have dissipated
+    amplitude_text = font.render(f'Amplitude: {amplitude:.3f} m', True, WHITE)
+    screen.blit(amplitude_text, (ui_x_start, 400 + 4 * y_spacing))  # Adjust position as needed
 
-    # Draw the walls
-    for wall in walls:
-        pygame.draw.rect(screen, GREY, wall)
+    # Render GUI
+    manager.update(time_delta)  # Update the GUI manager
+    manager.draw_ui(screen)  # Draw the GUI elements
 
-    draw_separator()
-    # Render UI
-    manager.draw_ui(screen)
-
-    pygame.display.flip()
+    # Update the display using pygame.display.flip()
+    pygame.display.flip()  # Present the entire display
 
 pygame.quit()
