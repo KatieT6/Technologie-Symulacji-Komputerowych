@@ -119,6 +119,7 @@ def rescale_wave_to_colormap(u):
     color_image = (color_image * 255).astype(np.uint8)  # Convert to 8-bit RGB format
     return color_image
 
+
 # Function to rescale wave data to grayscale color values
 def rescale_wave_to_grayscale(u):
     """Rescale wave data to a grayscale image."""
