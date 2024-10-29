@@ -3,6 +3,8 @@ from tkinter import filedialog
 import pygame
 import pygame_gui
 import numpy as np
+import matplotlib.cm as cm
+
 
 # Constants for UI
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
@@ -19,7 +21,7 @@ pygame.init()
 # Parameters for wave simulation
 Lx, Ly = 1.0, 1.0  # Domain size
 c = 1.0  # Wave speed
-nx, ny = 300, 300  # Number of spatial points
+nx, ny = 400, 400  # Number of spatial points
 dx, dy = Lx / (nx - 1), Ly / (ny - 1)  # Spatial step sizes
 dt = 0.001  # Time step size
 courant_x = (c * dt / dx) ** 2
@@ -37,66 +39,35 @@ u_prev = np.zeros((ny, nx))  # Previous wave state
 u_next = np.zeros((ny, nx))  # Next wave state
 amplitude = 0.00000000001  # Default amplitude for the wave
 
+# List to store impulse positions for multiple waves
+impulses = []
 
-# Function to generate a single impulse wave on button click
-def generate_impulse():
-    """Creates a single impulse at the center of the domain."""
-    global u, u_prev, amplitude
-    center_x, center_y = nx // 2, ny // 2
-    # Set the impulse to the specified amplitude
-    u[center_y, center_x] = amplitude  # Set impulse at the center
-    u_prev = u.copy()  # Store current state for the next step
+
+# Function to generate an impulse wave at a specific position
+def generate_impulse_at(x_click, y_click):
+    """Creates a single impulse at a specific position in the domain based on click coordinates."""
+    global u, u_prev, amplitude, impulses
+    # Convert the click position to grid indices
+    center_x = int((x_click - room_rect.left) / ROOM_WIDTH * nx)
+    center_y = int((y_click - room_rect.top) / ROOM_HEIGHT * ny)
+    # Add impulse to list of impulses
+    if 0 <= center_x < nx and 0 <= center_y < ny:
+        impulses.append((center_y, center_x, amplitude))  # Store position and amplitude of the impulse
 
 
 # Function to reset the simulation
 def reset_simulation():
     """Resets the wave simulation to its initial state."""
-    global u, u_prev, u_next
+    global u, u_prev, u_next, impulses
     u.fill(0)  # Reset current wave state to zero
     u_prev.fill(0)  # Reset previous wave state to zero
     u_next.fill(0)  # Reset next wave state to zero
+    impulses.clear()  # Clear all impulses
 
 
 # Pygame screen size and setup
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.DOUBLEBUF)
 pygame.display.set_caption("Sound Visualization and Wave Simulation")
-
-
-# Function to rescale wave data to grayscale color values
-def rescale_wave_to_grayscale(u):
-    """Rescale wave data to a grayscale image."""
-    u_min = np.min(u)
-    u_max = np.max(u)
-
-    if u_max == u_min:
-        u_rescaled = np.zeros_like(u, dtype=np.uint8)
-    else:
-        u_normalized = (u - u_min) / (u_max - u_min)
-        u_rescaled = (u_normalized * 255).astype(np.uint8)
-
-    grayscale_image = np.stack((u_rescaled,) * 3, axis=-1)
-
-    return grayscale_image
-
-
-# Time evolution of the wave with damping and echo
-def update_wave():
-    global u, u_prev, u_next
-    # Update the wave equation
-    u_next[1:-1, 1:-1] = (2 * u[1:-1, 1:-1] - u_prev[1:-1, 1:-1] +
-                          courant_x * (u[1:-1, 2:] - 2 * u[1:-1, 1:-1] + u[1:-1, :-2]) +
-                          courant_y * (u[2:, 1:-1] - 2 * u[1:-1, 1:-1] + u[:-2, 1:-1]) -
-                          damping_coefficient * u[1:-1, 1:-1])  # Include damping
-
-    # Echo simulation: Reflect the wave at the edges
-    u_next[0, :] = u_next[1, :]  # Top edge reflection
-    u_next[-1, :] = u_next[-2, :]  # Bottom edge reflection
-    u_next[:, 0] = u_next[:, 1]  # Left edge reflection
-    u_next[:, -1] = u_next[:, -2]  # Right edge reflection
-
-    u_prev = u.copy()
-    u = u_next.copy()
-
 
 # Draw separator line
 separator_y = 150  # y-coordinate for the separator line
@@ -117,8 +88,76 @@ def open_room_dialog():
         print("No file selected.")
 
 
+# Function to generate a single impulse wave at click position
+def generate_impulse(x, y):
+    """Creates a single impulse at the given coordinates (x, y)."""
+    global u, u_prev, amplitude
+    grid_x, grid_y = int(x * nx / ROOM_WIDTH), int(y * ny / ROOM_HEIGHT)
+    impulses.append((grid_y, grid_x, amplitude))  # Store the impulse location and amplitude
+
+
+# Function to reset the simulation
+def reset_simulation():
+    """Resets the wave simulation to its initial state."""
+    global u, u_prev, u_next, impulses
+    u.fill(0)
+    u_prev.fill(0)
+    u_next.fill(0)
+    impulses.clear()  # Clear the list of impulses
+
+# Pygame screen size and setup
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.DOUBLEBUF)
+pygame.display.set_caption("Sound Visualization and Wave Simulation")
+
+
+# Function to rescale wave data to a color map similar to heatmap
+def rescale_wave_to_colormap(u):
+    """Rescale wave data to a colormap."""
+    u_min, u_max = np.min(u), np.max(u)
+    norm = (u - u_min) / (u_max - u_min) if u_max > u_min else np.zeros_like(u)
+    color_image = cm.jet(norm)[:, :, :3]  # Use the 'jet' colormap from matplotlib, excluding alpha
+    color_image = (color_image * 255).astype(np.uint8)  # Convert to 8-bit RGB format
+    return color_image
+
+# Function to rescale wave data to grayscale color values
+def rescale_wave_to_grayscale(u):
+    """Rescale wave data to a grayscale image."""
+    u_min = np.min(u)
+    u_max = np.max(u)
+    if u_max == u_min:
+        u_rescaled = np.zeros_like(u, dtype=np.uint8)
+    else:
+        u_normalized = (u - u_min) / (u_max - u_min)
+        u_rescaled = (u_normalized * 255).astype(np.uint8)
+    grayscale_image = np.stack((u_rescaled,) * 3, axis=-1)
+    return grayscale_image
+
+
+# Time evolution of the wave with damping and echo
+def update_wave():
+    global u, u_prev, u_next
+    # Apply impulses for each timestep to simulate interference
+    for (center_y, center_x, amp) in impulses:
+        u[center_y, center_x] += amp
+
+    # Update wave equation
+    u_next[1:-1, 1:-1] = (2 * u[1:-1, 1:-1] - u_prev[1:-1, 1:-1] +
+                          courant_x * (u[1:-1, 2:] - 2 * u[1:-1, 1:-1] + u[1:-1, :-2]) +
+                          courant_y * (u[2:, 1:-1] - 2 * u[1:-1, 1:-1] + u[:-2, 1:-1]) -
+                          damping_coefficient * u[1:-1, 1:-1])  # Include damping
+
+    # Echo simulation: Reflect wave at edges
+    u_next[0, :] = u_next[1, :]
+    u_next[-1, :] = u_next[-2, :]
+    u_next[:, 0] = u_next[:, 1]
+    u_next[:, -1] = u_next[:, -2]
+
+    u_prev = u.copy()
+    u = u_next.copy()
+
 # Main Window setup
 manager = pygame_gui.UIManager((SCREEN_WIDTH, SCREEN_HEIGHT))
+
 
 # Tkinter initialization (for file dialog)
 root = tk.Tk()
@@ -199,12 +238,15 @@ while running:
                 damping_coefficient = amplitude
                 print(amplitude)
 
-        # Trigger wave generation on spacebar press or mouse click
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
-                generate_impulse()  # Generate a single impulse at the center
+        # Trigger wave generation on mouse click within the room_rect
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if room_rect.collidepoint(event.pos):
+                generate_impulse_at(event.pos[0], event.pos[1])  # Generate wave at mouse click
                 wave_active = True
-            elif event.key == pygame.K_r:
+
+        # Reset simulation with the 'r' key
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_r:
                 reset_simulation()  # Reset the simulation
 
     # Update wave only if the wave has been generated
