@@ -50,9 +50,12 @@ def generate_impulse_at(x_click, y_click):
     # Convert the click position to grid indices
     center_x = int((x_click - room_rect.left) / ROOM_WIDTH * nx)
     center_y = int((y_click - room_rect.top) / ROOM_HEIGHT * ny)
+
+    print(center_x, center_y)
+
     # Add impulse to list of impulses
     if 0 <= center_x < nx and 0 <= center_y < ny:
-        impulses.append((center_y, center_x, amplitude))  # Store position and amplitude of the impulse
+        impulses.append((center_x, center_y, amplitude))  # Store position and amplitude of the impulse
 
 
 # Function to reset the simulation
@@ -255,7 +258,7 @@ while running:
         update_wave()
 
     # Rescale to grayscale and create pygame surface
-    u_color = rescale_wave_to_grayscale(u)
+    u_color = rescale_wave_to_colormap(u)
     surface = pygame.surfarray.make_surface(u_color)
 
     # Scale to room size and display
