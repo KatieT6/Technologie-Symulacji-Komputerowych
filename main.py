@@ -52,7 +52,6 @@ def generate_impulse_at(x_click, y_click):
     center_y = int((y_click - room_rect.top) / ROOM_HEIGHT * ny)
 
     print(center_x, center_y)
-
     # Add impulse to list of impulses
     if 0 <= center_x < nx and 0 <= center_y < ny:
         impulses.append((center_x, center_y, amplitude))  # Store position and amplitude of the impulse
@@ -89,14 +88,6 @@ def open_room_dialog():
         print(f"Room file selected: {file_path}")
     else:
         print("No file selected.")
-
-
-# Function to generate a single impulse wave at click position
-def generate_impulse(x, y):
-    """Creates a single impulse at the given coordinates (x, y)."""
-    global u, u_prev, amplitude
-    grid_x, grid_y = int(x * nx / ROOM_WIDTH), int(y * ny / ROOM_HEIGHT)
-    impulses.append((grid_y, grid_x, amplitude))  # Store the impulse location and amplitude
 
 
 # Function to reset the simulation
@@ -242,10 +233,13 @@ while running:
                 damping_coefficient = amplitude
                 print(amplitude)
 
-        # Trigger wave generation on mouse click within the room_rect
+                # Handle mouse click to generate an impulse wave at click location
         if event.type == pygame.MOUSEBUTTONDOWN:
             if room_rect.collidepoint(event.pos):
-                generate_impulse_at(event.pos[0], event.pos[1])  # Generate wave at mouse click
+                mouse_x, mouse_y = event.pos
+                room_x, room_y = mouse_x - room_rect.left, mouse_y - room_rect.top
+                generate_impulse_at(room_x, room_y)  # Generate wave at click location
+                print(mouse_x, mouse_y)
                 wave_active = True
 
         # Reset simulation with the 'r' key
