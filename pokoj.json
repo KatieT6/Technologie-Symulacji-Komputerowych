@@ -1,0 +1,10 @@
+{
+  "walls": [
+    {"x_start": 50, "y_start": 50, "x_end": 50, "y_end": 250},
+    {"x_start": 50, "y_start": 250, "x_end": 150, "y_end": 250},
+    {"x_start": 150, "y_start": 250, "x_end": 150, "y_end": 150},
+    {"x_start": 150, "y_start": 150, "x_end": 250, "y_end": 150},
+    {"x_start": 250, "y_start": 150, "x_end": 250, "y_end": 50},
+    {"x_start": 250, "y_start": 50, "x_end": 50, "y_end": 50}
+  ]
+}
