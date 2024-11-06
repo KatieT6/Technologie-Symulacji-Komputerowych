@@ -116,13 +116,33 @@ def open_room_dialog():
         load_room_from_json(file_path)  # Load the room configuration
 
 
-def rescale_wave_to_colormap(u):
-    """Rescale wave data to a colormap."""
+# Function to rescale wave data to grayscale color values
+def rescale_wave_to_grayscale(u, gamma=0.8):
+    """Rescale wave data to a grayscale image."""
+    u_min = np.min(u)
+    u_max = np.max(u)
+    if u_max == u_min:
+        u_rescaled = np.zeros_like(u, dtype=np.uint8)
+    else:
+        u_normalized = (u - u_min) / (u_max - u_min)
+        u_normalized = u_normalized ** gamma
+        u_rescaled = (u_normalized * 255).astype(np.uint8)
+    grayscale_image = np.stack((u_rescaled,) * 3, axis=-1)
+    return grayscale_image
+
+
+def rescale_wave_to_colormap(u, gamma=1):
+    """Rescale wave data to a colormap with increased contrast."""
     u_min, u_max = np.min(u), np.max(u)
     norm = (u - u_min) / (u_max - u_min) if u_max > u_min else np.zeros_like(u)
+
+    # Apply gamma correction to increase contrast
+    norm = norm ** gamma
+
     color_image = cm.jet(norm)[:, :, :3]
     color_image = (color_image * 255).astype(np.uint8)
     return color_image
+
 
 
 def update_wave():
@@ -230,9 +250,6 @@ while running:
         if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
             running = False
 
-        # Handle Pygame GUI events
-        manager.process_events(event)
-
         # Check for amplitude slider change
         if event.type == pygame.USEREVENT:
             if event.ui_element == amplitude_slider:
@@ -247,7 +264,6 @@ while running:
 
         if event.type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
             if event.ui_element == wall_material_dropdown:
-                # Zamiast event.text używamy selected_option bezpośrednio
                 selected_material = wall_material_dropdown.selected_option
                 if selected_material is not None:
                     damping_coefficient = material_damping.get(selected_material,
@@ -275,7 +291,7 @@ while running:
         update_wave()
 
     # Rescale to grayscale and create pygame surface
-    u_color = rescale_wave_to_colormap(u)
+    u_color = rescale_wave_to_grayscale(u)
     surface = pygame.surfarray.make_surface(u_color)
 
     # Scale to room size and display
