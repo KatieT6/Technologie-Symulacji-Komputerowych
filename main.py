@@ -52,6 +52,7 @@ impulses = []
 
 # Grid to store walls (True where walls are present)
 walls = np.zeros((ny, nx), dtype=bool)
+wall_segments = []
 
 def generate_impulse_at(x_click, y_click):
     """Creates a single impulse at a specific position in the domain based on click coordinates."""
@@ -74,13 +75,13 @@ def reset_simulation():
 
 
 def load_room_from_json(file_path):
-    """Loads room walls from a JSON file and updates the wall grid."""
-    global walls
+    """Loads room walls from a JSON file, updates the wall grid, and stores wall segments for drawing."""
+    global walls, wall_segments
+    wall_segments.clear()  # Clear existing walls
+    walls.fill(False)  # Reset walls grid
+
     with open(file_path, 'r') as f:
         data = json.load(f)
-
-    # Reset walls
-    walls.fill(False)
 
     # Parse walls from JSON
     for wall in data.get("walls", []):
@@ -89,6 +90,16 @@ def load_room_from_json(file_path):
         x_end = int(wall["x_end"] / ROOM_WIDTH * nx)
         y_end = int(wall["y_end"] / ROOM_HEIGHT * ny)
 
+        # Scale coordinates to fit within room_rect for drawing
+        pixel_x_start = room_rect.left + int(wall["x_start"])
+        pixel_y_start = room_rect.top + int(wall["y_start"])
+        pixel_x_end = room_rect.left + int(wall["x_end"])
+        pixel_y_end = room_rect.top + int(wall["y_end"])
+
+        # Store scaled coordinates for drawing
+        wall_segments.append(((pixel_x_start, pixel_y_start), (pixel_x_end, pixel_y_end)))
+
+        # Mark walls in the grid for wave simulation
         if x_start == x_end:  # Vertical wall
             y_min, y_max = min(y_start, y_end), max(y_start, y_end)
             walls[y_min:y_max + 1, x_start] = True
@@ -281,6 +292,10 @@ while running:
     screen.blit(surface, room_rect.topleft)  # Use topleft to place inside the room
 
     draw_separator()  # Draw the separator line
+
+    # Draw each wall segment loaded from the JSON file
+    for (start, end) in wall_segments:
+        pygame.draw.line(screen, ORANGE, start, end, 3)  # Draw walls in orange with 3px thickness
 
     amplitude_text = font.render(f'Amplitude: {amplitude:.3f} m', True, WHITE)
     screen.blit(amplitude_text, (ui_x_start, 400 + 4 * y_spacing))  # Adjust position as needed
