@@ -46,6 +46,7 @@ u = np.zeros((ny, nx))  # Current wave state
 u_prev = np.zeros((ny, nx))  # Previous wave state
 u_next = np.zeros((ny, nx))  # Next wave state
 amplitude = 0.00000000001  # Default amplitude for the wave
+frequency = 5
 
 # List to store impulse positions for multiple waves
 impulses = []
@@ -217,7 +218,7 @@ frequency_label = pygame_gui.elements.UILabel(
 
 frequency_slider = pygame_gui.elements.UIHorizontalSlider(
     relative_rect=pygame.Rect((ui_x_start, 250 + 3 * y_spacing), (200, 25)),
-    start_value=440, value_range=(20, 2000), manager=manager)
+    start_value=frequency, value_range=(0, 100), manager=manager)
 font = pygame.font.Font(None, 20)
 
 # Sound Position Elements
@@ -253,9 +254,15 @@ while running:
         # Check for amplitude slider change
         if event.type == pygame.USEREVENT:
             if event.ui_element == amplitude_slider:
-                amplitude = amplitude_slider.get_current_value()  # Get the current value of the amplitude slider
-                damping_coefficient = amplitude #why tutaj jest tak przypisane
+                amplitude = amplitude_slider.get_current_value()
+                damping_coefficient = amplitude
                 print(amplitude)
+
+        if event.type == pygame.USEREVENT:
+            if event.ui_element == frequency_slider:
+                frequency = frequency_slider.get_current_value()
+                c = frequency
+                print(frequency)
 
 
         if event.type == pygame_gui.UI_BUTTON_PRESSED:
