@@ -58,30 +58,6 @@ Symulacja fali dźwiękowej została zaimplementowana w Pythonie z użyciem bibl
 - `rescale_wave_to_colormap(u, gamma)`: Skaluje dane fali do koloru z mapy kolorów.
 - `rescale_wave_to_grayscale(u, gamma)`: Skaluje dane fali do obrazu w skali szarości.
 
-### Matematyczne Objaśnienie Metody
-Symulacja fali dźwiękowej opiera się na równaniu falowym, które w dwóch wymiarach można zapisać jako:
-
-\[ \frac{\partial^2 u}{\partial t^2} = c^2 \left( \frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2} \right) \]
-
-gdzie:
-- \( u \) to przemieszczenie fali w punkcie \((x, y)\) w czasie \( t \),
-- \( c \) to prędkość fali,
-- \( \frac{\partial^2 u}{\partial t^2} \) to druga pochodna przemieszczenia względem czasu,
-- \( \frac{\partial^2 u}{\partial x^2} \) i \( \frac{\partial^2 u}{\partial y^2} \) to drugie pochodne przemieszczenia względem współrzędnych przestrzennych.
-
-W symulacji numerycznej używamy metody różnic skończonych do przybliżenia tych pochodnych. Dyskretyzacja równania falowego prowadzi do następującej formuły:
-
-\[ u_{\text{next}}[i, j] = 2u[i, j] - u_{\text{prev}}[i, j] + \left( \frac{c \cdot \Delta t}{\Delta x} \right)^2 \left( u[i+1, j] - 2u[i, j] + u[i-1, j] \right) + \left( \frac{c \cdot \Delta t}{\Delta y} \right)^2 \left( u[i, j+1] - 2u[i, j] + u[i, j-1] \right) \]
-
-gdzie:
-- \( u_{\text{next}} \) to przemieszczenie w następnym kroku czasowym,
-- \( u \) to przemieszczenie w bieżącym kroku czasowym,
-- \( u_{\text{prev}} \) to przemieszczenie w poprzednim kroku czasowym,
-- \( \Delta t \) to krok czasowy,
-- \( \Delta x \) i \( \Delta y \) to odstępy przestrzenne w siatce symulacyjnej.
-
-Dodatkowo, w symulacji uwzględniono tłumienie fali oraz odbicia od ścian, co jest realizowane poprzez odpowiednie warunki brzegowe i współczynnik tłumienia.
-
 
 ## Licencja
 Projekt jest dostępny na licencji MIT.
