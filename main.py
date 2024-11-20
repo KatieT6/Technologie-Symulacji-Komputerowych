@@ -30,11 +30,13 @@ courant_y = (c * dt / dy) ** 2
 damping_coefficient = 0.01
 
 # Define damping coefficients for materials
-material_damping = {
-    "Wood": 0.01,
+material_absorption = {
+    "Wood": 0.5,
     "Concrete": 0.05,
-    "Glass": 0.02
+    "Glass": 0.1
 }
+
+absorption = material_absorption["Wood"]
 
 # Grid for 2D wave simulation
 x = np.linspace(0, Lx, nx)
@@ -147,7 +149,7 @@ def rescale_wave_to_colormap(u, gamma=1):
 
 
 def update_wave():
-    """Update the wave simulation, accounting for damping and wall boundaries."""
+    """Update the wave simulation, accounting for damping, wall boundaries, and absorption."""
     global u, u_prev, u_next
     for (center_y, center_x, amp) in impulses:
         u[center_y, center_x] += amp
@@ -271,13 +273,12 @@ while running:
 
         if event.type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
             if event.ui_element == wall_material_dropdown:
-                selected_material = wall_material_dropdown.selected_option
-                if selected_material is not None:
-                    damping_coefficient = material_damping.get(selected_material,
-                                                               0.01)  # Domyślny współczynnik tłumienia 0.01
-                    print(f"Wybrany materiał: {selected_material}, Współczynnik tłumienia: {damping_coefficient}")
+                selected_material = event.text
+                absorption = material_absorption.get(selected_material)
+                if absorption is not None:
+                    print(f"Selected Material: {selected_material}, Absorption Coefficient: {absorption}")
                 else:
-                    print("Brak wybranego materiału!")
+                    print("Selected material not found in absorption dictionary!")
 
                 # Handle mouse click to generate an impulse wave at click location
         if event.type == pygame.MOUSEBUTTONDOWN:
