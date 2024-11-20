@@ -161,7 +161,8 @@ def update_wave():
     u_next[1:-1, 1:-1] = (
         (2 * u[1:-1, 1:-1] - u_prev[1:-1, 1:-1]) 
         + courant_x * (u[1:-1, 2:] - 2 * u[1:-1, 1:-1] + u[1:-1, :-2])
-        + courant_y * (u[2:, 1:-1] - 2 * u[1:-1, 1:-1] + u[:-2, 1:-1])
+        + courant_y * (u[2:, 1:-1] - 2 * u[1:-1, 1:-1] + u[:-2, 1:-1]
+                        -damping_coefficient * u[1:-1, 1:-1])
     )
 
     u_next[0, :] *= (1-damping_coefficient)  # Top boundary
