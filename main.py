@@ -30,13 +30,12 @@ courant_y = (c * dt / dy) ** 2
 damping_coefficient = 0.01
 
 # Define damping coefficients for materials
-material_absorption = {
-    "Wood": 0.5,
-    "Concrete": 0.05,
-    "Glass": 0.1
+material_damping = {
+    "Wood": 0.15,
+    "Concrete": 0.03,
+    "Glass": .04,
+    "Carpet": 0.9,
 }
-
-absorption = material_absorption["Wood"]
 
 # Grid for 2D wave simulation
 x = np.linspace(0, Lx, nx)
@@ -47,8 +46,8 @@ X, Y = np.meshgrid(x, y)
 u = np.zeros((ny, nx))  # Current wave state
 u_prev = np.zeros((ny, nx))  # Previous wave state
 u_next = np.zeros((ny, nx))  # Next wave state
-amplitude = 0.00000000001  # Default amplitude for the wave
-frequency = 5
+amplitude = 0.00001  # Default amplitude for the wave
+speed = 0.5  # Default speed for the wave
 
 # List to store impulse positions for multiple waves
 impulses = []
@@ -59,13 +58,13 @@ wall_segments = []
 
 def generate_impulse_at(x_click, y_click):
     """Creates a single impulse at a specific position in the domain based on click coordinates."""
-    global u, u_prev, amplitude, impulses
+    global u, u_prev, amplitude, speed, impulses
     # Convert the click position to grid indices
     center_x = int((x_click - room_rect.left) / ROOM_WIDTH * nx)
     center_y = int((y_click - room_rect.top) / ROOM_HEIGHT * ny)
 
     if 0 <= center_x < nx and 0 <= center_y < ny:
-        impulses.append((center_x, center_y, amplitude))  # Store position and amplitude of the impulse
+        impulses.append((center_x, center_y, amplitude, speed))  # Store position, amplitude, and speed of the impulse
 
 
 def reset_simulation():
@@ -130,6 +129,7 @@ def rescale_wave_to_grayscale(u, gamma=0.8):
         u_normalized = (u - u_min) / (u_max - u_min)
         u_normalized = u_normalized ** gamma
         u_rescaled = (u_normalized * 255).astype(np.uint8)
+    
     grayscale_image = np.stack((u_rescaled,) * 3, axis=-1)
     return grayscale_image
 
@@ -147,26 +147,35 @@ def rescale_wave_to_colormap(u, gamma=1):
     return color_image
 
 
-
 def update_wave():
-    """Update the wave simulation, accounting for damping, wall boundaries, and absorption."""
-    global u, u_prev, u_next
-    for (center_y, center_x, amp) in impulses:
+    """Update the wave simulation, accounting for damping and wall boundaries."""
+    global u, u_prev, u_next, c, damping_coefficient
+    courant_x = (c * dt / dx) ** 2
+    courant_y = (c * dt / dy) ** 2
+
+    # Loop through impulses and apply them to the wave grid
+    for (center_y, center_x, amp, spd) in impulses:
         u[center_y, center_x] += amp
 
-    # Update the wave equation with boundary reflections
+    # Update the wave equation with damping and boundary reflections
     u_next[1:-1, 1:-1] = (
-        (2 * u[1:-1, 1:-1] - u_prev[1:-1, 1:-1] +
-         courant_x * (u[1:-1, 2:] - 2 * u[1:-1, 1:-1] + u[1:-1, :-2]) +
-         courant_y * (u[2:, 1:-1] - 2 * u[1:-1, 1:-1] + u[:-2, 1:-1]) -
-         damping_coefficient * u[1:-1, 1:-1])
+        (2 * u[1:-1, 1:-1] - u_prev[1:-1, 1:-1]) 
+        + courant_x * (u[1:-1, 2:] - 2 * u[1:-1, 1:-1] + u[1:-1, :-2])
+        + courant_y * (u[2:, 1:-1] - 2 * u[1:-1, 1:-1] + u[:-2, 1:-1]
+                        -damping_coefficient * u[1:-1, 1:-1])
     )
 
-    # Apply wall boundaries (set to zero where walls are present)
-    u_next[walls] = 0  # Waves do not propagate through walls
+    u_next[0, :] *= (1-damping_coefficient)  # Top boundary
+    u_next[-1, :] *= (1-damping_coefficient)  # Bottom boundary
+    u_next[:, 0] *= (1-damping_coefficient)  # Left boundary
+    u_next[:, -1] *= (1-damping_coefficient)  # Right boundary
 
+    # Apply wall boundaries with reflection damping
+    u_next[walls] *= (1-damping_coefficient)  # Dampen wave at wall points
+    # Update wave arrays
     u_prev = u.copy()
     u = u_next.copy()
+
 
 # Main Window setup
 # Pygame and UI setup
@@ -196,7 +205,7 @@ room_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((ui_x_start
                                            text='Select Room',
                                            manager=manager)
 
-wall_material_dropdown = pygame_gui.elements.UIDropDownMenu(options_list=['Wood', 'Concrete', 'Glass'],
+wall_material_dropdown = pygame_gui.elements.UIDropDownMenu(options_list=['Wood', 'Concrete', 'Glass', 'Carpet'],
                                                             starting_option='Wood',
                                                             relative_rect=pygame.Rect((ui_x_start, 100 + y_spacing),
                                                                                       (200, 40)),
@@ -212,32 +221,17 @@ amplitude_slider = pygame_gui.elements.UIHorizontalSlider(
     relative_rect=pygame.Rect((ui_x_start, 180 + 2 * y_spacing), (200, 25)),
     start_value=amplitude, value_range=(0, 1), manager=manager)
 
-# Frequency UI Elements
-frequency_label = pygame_gui.elements.UILabel(
+# Speed UI Elements
+speed_label = pygame_gui.elements.UILabel(
     relative_rect=pygame.Rect((ui_x_start + 25, 220 + 3 * y_spacing), (150, 20)),
-    text="Frequency",
+    text="Speed",
     manager=manager)
 
-frequency_slider = pygame_gui.elements.UIHorizontalSlider(
+speed_slider = pygame_gui.elements.UIHorizontalSlider(
     relative_rect=pygame.Rect((ui_x_start, 250 + 3 * y_spacing), (200, 25)),
-    start_value=frequency, value_range=(0, 100), manager=manager)
+    start_value=speed, value_range=(0, 1), manager=manager)
 font = pygame.font.Font(None, 20)
 
-# Sound Position Elements
-position_label = pygame_gui.elements.UILabel(
-    relative_rect=pygame.Rect((ui_x_start + 25, 290 + 4 * y_spacing), (150, 20)),
-    text="Sound Position",
-    manager=manager)
-
-x_position_box = pygame_gui.elements.UITextEntryLine(
-    relative_rect=pygame.Rect((ui_x_start, 320 + 4 * y_spacing), (50, 30)),
-    manager=manager)
-x_position_box.set_text("0")
-
-y_position_box = pygame_gui.elements.UITextEntryLine(
-    relative_rect=pygame.Rect((ui_x_start + 100, 320 + 4 * y_spacing), (50, 30)),
-    manager=manager)
-y_position_box.set_text("0")
 
 # Room Visualization Area
 room_rect = pygame.Rect(50, 50, ROOM_WIDTH, ROOM_HEIGHT)
@@ -246,6 +240,8 @@ room_rect = pygame.Rect(50, 50, ROOM_WIDTH, ROOM_HEIGHT)
 running = True
 clock = pygame.time.Clock()
 wave_active = False  # Track whether the wave has been triggered
+amplitude_changed = False  # Track if amplitude has changed
+speed_changed = False  # Track if speed has changed
 
 while running:
     time_delta = clock.tick(60) / 1000.0
@@ -257,14 +253,15 @@ while running:
         if event.type == pygame.USEREVENT:
             if event.ui_element == amplitude_slider:
                 amplitude = amplitude_slider.get_current_value()
-                damping_coefficient = amplitude
-                print(amplitude)
+                amplitude_changed = True
+                print("Amplitude: ",amplitude)
 
         if event.type == pygame.USEREVENT:
-            if event.ui_element == frequency_slider:
-                frequency = frequency_slider.get_current_value()
-                c = frequency
-                print(frequency)
+            if event.ui_element == speed_slider:
+                speed = speed_slider.get_current_value()
+                c = speed
+                speed_changed = True
+                print("Current speed: ",speed*10)
 
 
         if event.type == pygame_gui.UI_BUTTON_PRESSED:
@@ -273,12 +270,12 @@ while running:
 
         if event.type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
             if event.ui_element == wall_material_dropdown:
-                selected_material = event.text
-                absorption = material_absorption.get(selected_material)
-                if absorption is not None:
-                    print(f"Selected Material: {selected_material}, Absorption Coefficient: {absorption}")
+                selected_material = wall_material_dropdown.selected_option
+                if selected_material is not None:
+                    damping_coefficient = material_damping.get(selected_material, material_damping[selected_material[0]])  # Default damping coefficient 0.01
+                    print(f"Selected material: {selected_material[0]}, Damping coefficient: {damping_coefficient}")
                 else:
-                    print("Selected material not found in absorption dictionary!")
+                    print("No material selected!")
 
                 # Handle mouse click to generate an impulse wave at click location
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -294,9 +291,11 @@ while running:
         manager.process_events(event)
 
 
-    # Update wave only if the wave has been generated
-    if wave_active:
+    # Update wave only if the wave has been generated or amplitude has changed or speed has changed
+    if wave_active or amplitude_changed or speed_changed:
         update_wave()
+        amplitude_changed = False  # Reset the flag
+        speed_changed = False  # Reset the flag
 
     # Rescale to grayscale and create pygame surface
     u_color = rescale_wave_to_grayscale(u)
