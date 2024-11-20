@@ -6,7 +6,6 @@ import numpy as np
 import matplotlib.cm as cm
 import json
 
-
 # Constants for UI
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
 ROOM_WIDTH, ROOM_HEIGHT = 400, 400
@@ -27,7 +26,8 @@ dx, dy = Lx / (nx - 1), Ly / (ny - 1)  # Spatial step sizes
 dt = 0.001  # Time step size
 courant_x = (c * dt / dx) ** 2
 courant_y = (c * dt / dy) ** 2
-damping_coefficient = 0.01
+damping_factor = 0.0
+amplitude = 0.5  # Initial amplitude of the wave
 
 # Define damping coefficients for materials
 material_damping = {
@@ -45,7 +45,6 @@ X, Y = np.meshgrid(x, y)
 u = np.zeros((ny, nx))  # Current wave state
 u_prev = np.zeros((ny, nx))  # Previous wave state
 u_next = np.zeros((ny, nx))  # Next wave state
-amplitude = 0.00000000001  # Default amplitude for the wave
 
 # List to store impulse positions for multiple waves
 impulses = []
@@ -56,14 +55,15 @@ wall_segments = []
 
 def generate_impulse_at(x_click, y_click):
     """Creates a single impulse at a specific position in the domain based on click coordinates."""
+    
     global u, u_prev, amplitude, impulses
     # Convert the click position to grid indices
     center_x = int((x_click - room_rect.left) / ROOM_WIDTH * nx)
     center_y = int((y_click - room_rect.top) / ROOM_HEIGHT * ny)
 
     if 0 <= center_x < nx and 0 <= center_y < ny:
+        print("amplitude: ", amplitude)
         impulses.append((center_x, center_y, amplitude))  # Store position and amplitude of the impulse
-
 
 def reset_simulation():
     """Resets the wave simulation to its initial state."""
@@ -72,7 +72,6 @@ def reset_simulation():
     u_prev.fill(0)
     u_next.fill(0)
     impulses.clear()  # Clear all impulses
-
 
 def load_room_from_json(file_path):
     """Loads room walls from a JSON file, updates the wall grid, and stores wall segments for drawing."""
@@ -107,14 +106,12 @@ def load_room_from_json(file_path):
             x_min, x_max = min(x_start, x_end), max(x_start, x_end)
             walls[y_start, x_min:x_max + 1] = True
 
-
 def open_room_dialog():
     """Opens a file dialog to select a room JSON file and loads it."""
     file_path = filedialog.askopenfilename()
     if file_path:  # Check if a file was selected
         print(f"Room file selected: {file_path}")
         load_room_from_json(file_path)  # Load the room configuration
-
 
 # Function to rescale wave data to grayscale color values
 def rescale_wave_to_grayscale(u, gamma=0.8):
@@ -130,7 +127,6 @@ def rescale_wave_to_grayscale(u, gamma=0.8):
     grayscale_image = np.stack((u_rescaled,) * 3, axis=-1)
     return grayscale_image
 
-
 def rescale_wave_to_colormap(u, gamma=1):
     """Rescale wave data to a colormap with increased contrast."""
     u_min, u_max = np.min(u), np.max(u)
@@ -143,43 +139,81 @@ def rescale_wave_to_colormap(u, gamma=1):
     color_image = (color_image * 255).astype(np.uint8)
     return color_image
 
-
-
 def update_wave():
     """Update the wave simulation, accounting for damping and wall boundaries."""
     global u, u_prev, u_next
     for (center_y, center_x, amp) in impulses:
         u[center_y, center_x] += amp
 
-    # Update the wave equation with boundary reflections
+    # Update the wave equation
     u_next[1:-1, 1:-1] = (
-        (2 * u[1:-1, 1:-1] - u_prev[1:-1, 1:-1] +
-         courant_x * (u[1:-1, 2:] - 2 * u[1:-1, 1:-1] + u[1:-1, :-2]) +
-         courant_y * (u[2:, 1:-1] - 2 * u[1:-1, 1:-1] + u[:-2, 1:-1]) -
-         damping_coefficient * u[1:-1, 1:-1])
+        2 * u[1:-1, 1:-1] - u_prev[1:-1, 1:-1] +
+        courant_x * (u[1:-1, 2:] - 2 * u[1:-1, 1:-1] + u[1:-1, :-2]) +
+        courant_y * (u[2:, 1:-1] - 2 * u[1:-1, 1:-1] + u[:-2, 1:-1])
     )
+
+    print(damping_factor)
+    # Apply damping to the boundaries
+    u_next[0, :] *= damping_factor  # Top boundary
+    u_next[-1, :] *= damping_factor  # Bottom boundary
+    u_next[:, 0] *= damping_factor  # Left boundary
+    u_next[:, -1] *= damping_factor  # Right boundary
 
     # Apply wall boundaries (set to zero where walls are present)
     u_next[walls] = 0  # Waves do not propagate through walls
 
+    # Update previous wave state
     u_prev = u.copy()
+    # Update current wave state
     u = u_next.copy()
+    
+# def update_wave():
+#     """Update the wave simulation, accounting for damping and wall boundaries."""
+#     global u, u_prev, u_next
+#     for (center_y, center_x, amp) in impulses:
+#         u[center_y, center_x] += amp
+
+#     # Update the wave equation with boundary reflections
+#     u_next[1:-1, 1:-1] = (
+#         (2 * u[1:-1, 1:-1] - u_prev[1:-1, 1:-1] +
+#          courant_x * (u[1:-1, 2:] - 2 * u[1:-1, 1:-1] + u[1:-1, :-2]) +
+#          courant_y * (u[2:, 1:-1] - 2 * u[1:-1, 1:-1] + u[:-2, 1:-1])
+#          )
+#     )
+
+#     # Apply boundary reflection damping
+#     u_next[0, :] *= damping_factor  # Top boundary
+#     u_next[-1, :] *= damping_factor  # Bottom boundary
+#     u_next[:, 0] *= damping_factor  # Left boundary
+#     u_next[:, -1] *= damping_factor  # Right boundary
+
+#     # Apply wall boundaries (set to zero where walls are present)
+#     u_next[walls] = 0  # Waves do not propagate through walls
+
+#     # Apply boundary reflection damping
+#     u_next[0, :] = 0  # Top boundary
+#     u_next[-1, :] = 0  # Bottom boundary
+#     u_next[:, 0] = 0  # Left boundary
+#     u_next[:, -1] = 0  # Right boundary
+
+#     # Update previous wave state
+#     u_prev = u.copy()
+#     # Update current wave state
+#     u = u_next.copy()
 
 # Main Window setup
 # Pygame and UI setup
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.DOUBLEBUF)
-pygame.display.set_caption("Sound Visualization and Wave Simulation")
+pygame.display.set_caption("Sound Visualization")
 manager = pygame_gui.UIManager((SCREEN_WIDTH, SCREEN_HEIGHT))
 
 # Draw separator line
 separator_y = 150  # y-coordinate for the separator line
 separator_color = GREY  # Line color
 
-
 # Function to draw a separator line
 def draw_separator():
     pygame.draw.line(screen, separator_color, (550, separator_y), (750, separator_y), 5)
-
 
 # Tkinter initialization (for file dialog)
 root = tk.Tk()
@@ -217,7 +251,7 @@ frequency_label = pygame_gui.elements.UILabel(
 
 frequency_slider = pygame_gui.elements.UIHorizontalSlider(
     relative_rect=pygame.Rect((ui_x_start, 250 + 3 * y_spacing), (200, 25)),
-    start_value=440, value_range=(20, 2000), manager=manager)
+    start_value=damping_factor, value_range=(0, 1), manager=manager)
 font = pygame.font.Font(None, 20)
 
 # Sound Position Elements
@@ -254,9 +288,9 @@ while running:
         if event.type == pygame.USEREVENT:
             if event.ui_element == amplitude_slider:
                 amplitude = amplitude_slider.get_current_value()  # Get the current value of the amplitude slider
-                damping_coefficient = amplitude #why tutaj jest tak przypisane
-                print(amplitude)
 
+            if event.ui_element == frequency_slider:
+                damping_factor = frequency_slider.get_current_value()  # Get the current value of the frequency slider
 
         if event.type == pygame_gui.UI_BUTTON_PRESSED:
             if event.ui_element == room_button:
@@ -266,13 +300,13 @@ while running:
             if event.ui_element == wall_material_dropdown:
                 selected_material = wall_material_dropdown.selected_option
                 if selected_material is not None:
-                    damping_coefficient = material_damping.get(selected_material,
+                    damping_factor = material_damping.get(selected_material,
                                                                0.01)  # Domyślny współczynnik tłumienia 0.01
-                    print(f"Wybrany materiał: {selected_material}, Współczynnik tłumienia: {damping_coefficient}")
+                    print(f"Wybrany materiał: {selected_material}, Współczynnik tłumienia: {damping_factor}")
                 else:
                     print("Brak wybranego materiału!")
 
-                # Handle mouse click to generate an impulse wave at click location
+        # Handle mouse click to generate an impulse wave at click location
         if event.type == pygame.MOUSEBUTTONDOWN:
             if room_rect.collidepoint(event.pos):
                 generate_impulse_at(event.pos[0], event.pos[1])  # Generate wave at mouse click
@@ -284,7 +318,6 @@ while running:
                 reset_simulation()  # Reset the simulation
 
         manager.process_events(event)
-
 
     # Update wave only if the wave has been generated
     if wave_active:
