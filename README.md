@@ -33,6 +33,11 @@ Projekt symulacji fali dźwiękowej w pomieszczeniu z możliwością interakcji 
     ```
 
 ## Uruchomienie
+Plik EXE w katalogu ./dist
+```
+./dist/main.exe
+```
+
 1. Uruchom główny skrypt:
     ```sh
     python main.py

@@ -1,0 +1,6 @@
+W oknie symulacji:
+    - Kliknij przycisk "Select Room", aby wybrać plik JSON z konfiguracją pomieszczenia.
+    - Wybierz z menu wyboru typ ścian pomieszczeina.
+    - Kliknij w obszar symulacji, aby wygenerować impuls falowy.
+    - Użyj suwaków, aby dostosować amplitudę i prędkość fali.
+    - Naciśnij klawisz "r", aby zresetować symulację.
